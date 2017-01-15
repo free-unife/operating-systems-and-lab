@@ -1,0 +1,269 @@
+%
+% relazione_progetto.tex
+%
+% Copyright © 2017 Franco Masotti <franco.masotti@student.unife.it>
+% This work is free. You can redistribute it and/or modify it under the
+% terms of the Do What The Fuck You Want To Public License, Version 2,
+% as published by Sam Hocevar. See the LICENSE file for more details.
+%
+
+\makeatletter
+\def\blfootnote{\xdef\@thefnmark{}\@footnotetext}
+\makeatother
+
+\documentclass[12pt a4paper oneside]{article}
+	%\usepackage{hyperref}
+	\usepackage{setspace}
+	\singlespacing % interlinea singolo
+	\title{Relazione progetto ChatFe}
+	\author{Franco Masotti}
+	\date{October 9, 2014}
+\begin{document}
+	\maketitle
+	\tableofcontents
+	\newpage
+    \footnotetext{operating-systems-and-lab Copyright (C) 2017  frnmst (Franco Masotti)
+This work is free. You can redistribute it and/or modify it under 
+the terms of the Do What The Fuck You Want To Public License, Version 2,
+as published by Sam Hocevar. See the LICENSE file for more details.}
+	\part{Il progetto}
+		\section{Scelte di progetto}
+			\par
+			Ho deciso di suddividere ogni problema significativo ed utilizzato spesso in funzioni. Se la funzione \'e utilizzata all'interno di pi\'u file sorgenti allora questa si trova all'interno di un file sorgente a s\'e stante. Client e server affrontano alcuni problemi comuni (come la gestione degli errori, lettura/scrittura sui socket, ecc...) e per questo utilizzano funzioni condivise. Funzioni utilizzate solo all'interno di un determinato file sorgente rimangono in quel file sorgente.
+			\par
+			Il server esegue tre tipi di thread: thread main, worker e dispatcher. Per lavorare pi\'u facilmente e per chiarezza ho creato tre file sorgenti (uno per ogni tipo di thread). Ho ritenuto che per il client non fosse necessario creare pi\'u di un sorgente dato che si tratta si un applicativo pi\'u semplice rispetto al server.
+			\par
+			Per testare il server (prima di aver scritto il client) ho utilizzato una connessione \texttt{telnet} allinterno di una shell: \begin{verbatim}$ telnet 127.0.0.1 1234\end{verbatim} attraverso il quale ci si collega direttamente al server. Per questo motivo, non potendo prevedere l'input di un utente attraverso questo tipo di connessione, il server fa rigorosi controlli di input. Per utilizzare \texttt{telnet} \'e neccessario conoscere il protocollo di comunicazione della chat.
+			\par
+			Il protocollo di comunicazione \'e basato su cinque campi, di lunhezza massima prefissata e ognuno con un significato ben preciso, separati dal carattere '\texttt{:}'. Quesi campi sono definiti nella struttura \texttt{msg\_t}. In questo modo \'e pi\'u semplice sia per il server sia per il client la lettura di ogni campo. \'E sufficiente infatti tokenizzare ogni campo basandosi sui '\texttt{:}', e non, ad esempio, su un metodo che utilizza dei numeri per rappresentare la lunghezza di un dato campo.
+			\par
+			Ogni file sorgente (\texttt{*.c}) ha un corrispondente file header ({\texttt{*.h}). Il compilatore esegue la compilazione codizionale basandosi sul file \texttt{main\_includes.h} evitando cos\'i che un file sia incluso pi\'u volte del necessario, il che genererebbe errori. In questo modo ho potuto separare alcune funzioni chiave dalle altre, in modo semplice.
+			\par
+			Tutte le funzioni di allocazione di memoria (come \texttt{malloc}, \texttt{strdup}) vengono controllate in caso di errore. Ho anche utilizzato funzioni con protezione contro buffer overflow (come \texttt{strncat}, \texttt{snprintf}, \texttt{fgets}) quando possibile, poich\'e non si pu\'o sempre prevedere l'input dell'utente.
+			\newpage
+		\section{Principali strutture dati}
+			\par
+			La gestione degli utenti viene fatta inizialmente da una lista riempita all'avvio del server. La lista \'e definita da una struttura di tipo \texttt{users}. Questa \'e usata insieme alla tabella hash in modo da agevolare le operazioni di ricerca, aggiunta e invio di messaggi tra utenti.
+			\par
+			Per passare argomenti ai thread vengono usati dei puntatori  (di tipo \texttt{void *}) a delle strutture dati. Queste strutture contegono informazioni necessarie al funzionamento dei thread. Ad esempio al \texttt{thread worker}, che si occupa della comnicazione tra client e server, viene passato il \texttt{client socket descriptor, csd\_socket}, del client appena connesso\footnote{Per questioni di spazio riferirsi al codice sorgente per i commenti}:
+			\begin{verbatim}
+// vedi do_tworker.h
+struct thread_worker_struct // dati thread worker
+{
+  int csd_socket; // client socket descriptor
+  users *head_usrs_list;
+  td_c_p *td_mux_struct; // serve per comunicazione con thread dispatcher
+  tw_log_c *tw_mux_struct; // scrittura su log file
+};
+			\end{verbatim}
+			\par
+			I mutex e le informazioni associati ai thread sono presenti negli header del \texttt{thread worker} e \texttt{thread dispatcher}. Qui sono definiti nelle rispettive strutture:
+			\begin{verbatim}
+// vedi do_tworker.h
+struct _tw_log_c // thread worker log control
+{
+  pthread_mutex_t mux_log; // semaforo per log file
+  pthread_cond_t cond_log; // coda di attesa per log file
+  int w_logfile;
+};
+
+// vedi do_tdispatcher.h
+#define K SOMAXCONN / 2
+#define REQ_NUM K / 2 // numero max di richieste
+
+struct _td_c_p
+{
+  char *buff_r[K]; // buffer delle richieste
+  int pos_r;
+  int pos_w;
+  int count; // numero totale di elementi
+  pthread_mutex_t mux_tdispatcher;
+  pthread_cond_t full;
+  pthread_cond_t empty;
+};
+			\end{verbatim}
+			Nel thread worker \'e definito il mutex, la condition e l'intero che si riferiscono alla scrittura sul file di log in modo che un solo \texttt{thread worker} alla volta scriva sul log. Il \texttt{thread dspatcher} invece ha bisogno dei mutex perch\'e deve entrare in funzione quando il buffer delle richieste non \'e vuoto (cio\'e \texttt{count != 0}) altrimenti rimane in attesa di una \texttt{pthread\_cond\_signal} dal \texttt{thread worker}. Le variabili \texttt{pos\_r} e \texttt{pos\_w} definiscono rispettivamente la posizione corrente di lettura e scrittura sul buffer circolare \texttt{buff\_r}, la prima incrementata dal \texttt{thread dispatcher} la seconda incrementata dal \texttt{thread worker}.
+			\par
+			Assieme alla tabella hash ho creato una lista singolarmente concatenata per gestire alcune informazioni riguardanti gli utenti. Queste informazioni comprendono il nome utente (\texttt{username}) e il numero corrente della richiesta associata a tale utente (\texttt{req}). Questa struttura \'e utilizzata nelle operazioni di rierca, in particolare la stampa degli utenti collegati, nell'invio dei messaggi singoli e broadcast (nei quali viene effettivamente usato \texttt{req}) e durante la disconnessione del client:
+			\begin{verbatim}
+// vedi hash.h
+struct _users
+{
+  char *username;
+  int req; /* numero della richiesta
+  * da usare per la comunicazione
+  * tra tworker e tdispatcher */
+  struct _users *next; // puntatore al successivo
+};
+typedef struct _users users; // ridefinizione struttura
+users usrs; // dichiarazione instanza globale struttura
+			\end{verbatim}
+		\newpage
+		\section{Descrizione degli algoritmi fondamentali}
+			\par
+			Nel \texttt{thread main} viene aperto il file degli utenti \texttt{user file} e viene letto riga per riga con fgets:
+			\begin{verbatim}
+while (fgets (tmp_f_l_buf, sizeof (tmp_f_l_buf), tmp_usr_fd) != NULL)
+{
+  insert = (hdata_t *) malloc (sizeof (hdata_t));
+  ret_str_token_read = str_token_read (tmp_f_l_buf, insert);
+  if (ret_str_token_read == 0)
+  {
+      insert -> sockid   = -1;
+      search = CERCAHASH (insert -> uname, H);
+      if (search == NULL)
+      {
+          INSERISCIHASH (insert -> uname, insert, H);
+          head_do_tmain = ADD_USR_TO_LIST (insert -> uname, head_do_tmain);
+      }
+      else
+          err_handler_argv (E_USR_ALREADY_EXISTS, insert -> uname, 0, 0);
+  }
+}
+			\end{verbatim}
+			Ogni riga del file corrisponde alle informazioni di un utente singolo. La riga viene tokenizzata e salvata nella tabella hash grazie alla funzione \texttt{str\_token\_read}. Successivamente viene controllata la validit\'a dei dati della riga, in particolare se esiste una riga con lo stesso nome utente. Questo viene fatto accedendo alla tabella hash con \texttt{CRECAHASH}. Se i campi non corrispondono al tipo di dato previsto allora vengono o segnalati o ignorati.
+			\par
+			Alla chiusura del programma, nel \texttt{thread\_main} vengono salvati tutti gli utenti dalla hash table allo \texttt{user-file}. Viene ispezionata la lista, elemento per elemento, con il putatore tremporaneo tmp e per ogni utente trovato nella tabella hash (\texttt{search != NULL}) vengono stampate le informazioni nello \texttt{user-file}\newline(con \texttt{snprintf}):
+			\begin{verbatim}
+tmp = head_do_tmain;
+while (tmp != NULL)
+{
+  search = CERCAHASH (tmp -> username, H);
+  if (search != NULL)
+  {
+    len_usr_record = strlen (search -> uname)
+    + strlen (search -> fullname)
+    + strlen (search -> email) + 4;
+    usr_record = (char *) malloc (sizeof (char) * len_usr_record);
+    if (usr_record == NULL)
+      err_handler (E_MALLOC, 'x', 'w');
+
+    bzero ((void *) usr_record, len_usr_record);
+
+    snprintf (usr_record, len_usr_record, "%s:%s:%s\n", search -> uname,
+    search -> fullname, search -> email);
+
+    ret_io_bytes = write (usr_fd, usr_record, len_usr_record - 1);
+    if (ret_io_bytes != (ssize_t) len_usr_record - 1)
+      err_handler_argv (E_WRITE_USR_RECORD_FILE, search -> uname, 0, 'w');
+
+    free (usr_record);
+  }
+  tmp = tmp -> next;
+}
+			\end{verbatim}
+			\par
+			Dopo l'accettazione di un client il \texttt{thread\_main} avvia un nuovo \texttt{thread\_worker} il quale si mette in attesa di comandi con la funzione \texttt{get\_and\_parse\_cmd} presente nel file sorgente \texttt{parse.c}. La funzione si blocca subito su una read di 1 Byte. Questo viene fatto per avere un "blocco" affinche la systemcall \texttt{ioctl} (con il flag \texttt{FIONREAD}) possa calcolare il numero di Byte in attesa nel socket cos\'icch\'e le funzioni di allocazione della memoria (es: \texttt{malloc}) possano funzionare correttamente. Poich\'e ogni campo del messaggio in entrata \'e separato dal carattere '\texttt{:}', all'interno di \texttt{get\_and\_parse\_cmd} viene fatto un controllo preliminare del formato. Se il controllo \'e superato, viene chiamata la funzione demar che fa il demareshalling vero e proprio. \'E da notare che \texttt{get\_and\_parse\_cmd} \'e una funzione condivisa, quindi utilizzata dal \texttt{thread\_receiver} nel client:
+			\begin{verbatim}
+[...]
+
+ret_io_bytes = read (csd_local, dummy_byte, 1);
+if (ret_io_bytes == 0 || errno == EINVAL)
+  return 1;
+
+ret_io_bytes = ioctl (csd_local, FIONREAD, &total_msglen);
+
+[...]
+
+if (total_msglen < 5)
+{
+  read (csd_local, dummy_buff, (size_t) total_msglen); // flush socket
+  free (dummy_buff);
+
+  return 2; // bad cmd
+}
+
+[...]
+
+buff_msg = (char *) malloc (sizeof (char) * total_msglen);
+if (buff_msg == NULL)
+  err_handler (E_MALLOC, 'x', 'w');
+bzero ((void *) buff_msg, total_msglen);
+
+ret_io_bytes = read (csd_local, buff_msg, total_msglen);
+if (ret_io_bytes != (ssize_t) total_msglen)
+  err_handler (E_READ_SOCK, 'x', 'w');
+  
+[...]
+
+ret_demar = demar (final_buff_msg, msg_t_local);
+
+[...]
+
+free (final_buff_msg);
+
+if (ret_demar == 2) // comando sconosciuto
+  return 2; // ritorna comando sconosciuto
+if (ret_demar == 3) // formato messaggo non valido
+  return 3; // ritorna formato non valido
+
+return 0;
+
+			\end{verbatim}
+		\newpage
+	\part{Descrizione della struttura dei programmi}
+		\par
+		Tutti i file sorgenti (\texttt{*.c}) si riferiscono all'header \texttt{main\_includes.h}. Ogni file sorgente ha il proprio file header.
+		\par
+		I programmi sono strutturati in modo che venga controllato il valore di ritorno delle funzioni fondamentali e che venga fatto il casting esplicito quando è necessario, per evitare problemi e warning del compilatore o durante l'esecuzione dei programmi. Ad esempio nella funzione \texttt{write\_logfile\_cmd}, presente nel sorgente \texttt{do\_tworker.c} viene controllato il valore di ritorno della \texttt{write} attraverso il casting esplicito da un tipo \texttt{size\_t} a \texttt{ssize\_t}.
+		\begin{verbatim}
+[...]
+
+ret_io_bytes = write (log_fd, "\n", strlen ("\n"));
+if (ret_io_bytes != (ssize_t) strlen ("\n"))
+  err_handler (E_LOG_FILE_WRITE, 0, 'w');
+
+[...]
+		\end{verbatim}
+		Anche se potrebbe sembrare inutile, questo garantisce la correttezza dei programmi.
+		\par
+		Per semplificare la gestione degli errori ho definito delle macro in \texttt{err\_handler.h} ognuna corrisponente ad una stringa. In questo modo il codice risulta pi\'u pulito ed \'e sufficiente cambiare una volta la stringa per vederla cambiare in tutto il programma.
+		\newpage
+	\part{Difficolt\'a e soluzioni adottate}
+		\par
+		La maggior parte dei problemi si sono verificati con la gestione delle stringhe e dei socket.
+		\par
+		Per risolvere il primo problema ho fatto riferimento allo starndard C che prevede che ogni stringa abbia il proprio terminatore, cio\'e il carattere '\texttt{\symbol{92}0}'. Per questo motivo prima di ogni \texttt{malloc} c'\'e una chiamata alla funzione \texttt{bzero} che consente di azzerare tutti i bit di una zona di memoria. Quando non \'e stato possibile usare \texttt{bzero} ho settato come ultimo carattere dell'array, '\texttt{\symbol{92}0}'.
+		\par
+		Per quanto riguarda la gestione dei socket il problema sta nell'utilizzo di funzioni bloccanti, come \texttt{recv} o \texttt{read} che creano molti problemi quando si lavora con pi\'u thread. Ad esempio alla terminazione del server, se un client \'e collegato, il server \'e bloccato sulla \texttt{recv}, viene chiuso il socket sul quale l'utente \'e collegato in modo da generare un errore (\texttt{EINVAL}) che viene gestito come errore paricolare. Questo pu\'o essere verificato nella funzione \texttt{get\_and\_parse\_cmd}:
+		\begin{verbatim}
+[...]
+
+ret_io_bytes = read (csd_local, dummy_byte, 1);
+if (ret_io_bytes == 0 || errno == EINVAL)
+  return 1;
+
+[...]
+		\end{verbatim}
+		Un metodo simile \'e stato applicato nel client quando si effettua il logout:
+		\begin{verbatim}
+[...]
+	
+case 1: // fatal err or closed socket
+{
+  go = 0;
+  fprintf (stderr, "Connessione rifiutata o disconnessione\n");
+  fclose (stdin);
+  break;
+}
+
+[...]
+		\end{verbatim}
+		In questo caso il thread receiver, quando rileva che il socket \'e stato chiuso (cio\'e \texttt{case 1:}) chiude \texttt{stdin} con \texttt{fclose(stdin)} in modo che \texttt{fgets} nel thread sender si sblocchi e ritorni \texttt{NULL}, cos\'i da uscire in sicurezza:
+		\begin{verbatim}
+[...]
+
+ret_fgets = fgets (msg, sizeof (msg), stdin); // get msg from stdin
+if (ret_fgets != NULL) // se stdin è ancora aperto
+
+[...]
+
+else // riferito all'if sopra
+{
+  go = 0; 
+  fprintf (stdout, "\n"); // vai a capo dopo disconnessione
+}
+
+[...]
+		\end{verbatim}
+\end{document}
