@@ -4,29 +4,32 @@ A chat written in C related to "Sistemi operativi e laboratorio" course in UNIFE
 
 ## Structure
 
-This repository contains a chat called chatFe written in C, which was
+This repository contains a chat called *chatFe* written in C, which was
 an assignment to write as part of the exam. Here, on GitHub, there are 
-other *chatFe*s made by students of this same course.  It's not up to me to say 
-if they are better or worse than mine. Anyway this is what I think of my 
-implementation:
+other *chatFe*s made by students of this same course. In some of those
+repositories you can find the assignment given by the professor
+which isn't reported here for copyright issues. Aside from this, 
+it's not up to me to say if their implementations are better or worse 
+than mine. Anyway this is what I think of my program and what resulted
+from all the background work:
 
 - The good:
     - It works.
-    - It helped me a lot in the future in:
-        - programming
-        - LaTex.
+    - It helped me a lot in the future as of:
+        - programming.
+        - LaTeX.
+        - How to comment, indent and write documentation.
 
 - The bad:
     - Comments and report are written in italian language.
-    - Quite inefficient.
-    - No encryption.
+    - Quite inefficient overall.
 
 - The ugly:
-    - Code is very messy
+    - Code is very messy:
         - Long functions.
         - Unecessary controls.
         - No C standard is used.
-    - Too many files
+    - Too many files:
         - fragmentation.
     - Bad indentation.
 
