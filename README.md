@@ -5,8 +5,8 @@ A chat written in C related to "Sistemi operativi e laboratorio" course in UNIFE
 ## Structure
 
 This repository contains a chat called chatFe written in C, which was
-an assignment to write as part of the exam. Here, on GitHub there are 
-other "chatFe"s made by students of this same course.  It's not up to me to say 
+an assignment to write as part of the exam. Here, on GitHub, there are 
+other *chatFe*s made by students of this same course.  It's not up to me to say 
 if they are better or worse than mine. Anyway this is what I think of my 
 implementation:
 
@@ -87,9 +87,10 @@ client help:
                     sender:*:message
                             Visualizzazione messaggio `msg` inviato dall'utente `sender` e ricevuto da tutti (messaggio broadcast).
     
+### Customization
 
-Once you study the format from the document
-you can use chatFe via `telnet`. You can also
+Once you study the format from the report
+you can use *chatFe* via `telnet`. You can also
 change listening addresses and ports of client and server
 by editing `chat-client.h` and `do_tmain.h` (as well as `do_tmain.c`)
 respectively.
@@ -102,13 +103,13 @@ respectively.
     - Compiles source files into `chat-client` and `chat-server`.
 - `install`
     - Copies `chat-client` and `chat-server` into `../bin`.
-- clean
+- `clean`
     - Removes object and executable files.
 
 ## Report
 
 You can find a pdf report in italian language under the `doc` directory.
-The original source of this file is written in LaTex and it can be compiled 
+The original source of this file is written in LaTeX and it can be compiled 
 with the following command, to obtain `relazione_progetto.pdf`:
 
     $ pdflatex relazione_progetto.tex
@@ -119,7 +120,7 @@ About any information not reported in this readme, I can assert one statement:
 
 ![message.jpg](message.jpg)
 
-Please, don't use this programs for serious/production applications.
+Please, don't use this programs nor serious nor for production applications.
 
 ## License
 
